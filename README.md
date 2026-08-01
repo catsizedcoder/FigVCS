@@ -11,6 +11,8 @@ FigVCS is a (VCS) Version Control System built specifically for managing [Figura
 - Add easy library linking to have libraries update automatically with something like `fvcs pull`
 - Eventually a Desktop GUI with Linux and Windows support(Possibly even MacOS support) since I know not everyone prefers CLI
 - A Minecraft Companion mod for FigVCS that allows for dynamically saving versions of avatars and managing versions within [FiguraMC](https://github.com/FiguraMC/Figura)
+- Add the support for automatic backups to a server if configured, allowing for avatars to be restored even if the user encounters hardware failure.
+- Create a system that is similar to git except more user friendly while also not compromising usability and allowing for in depth usage for automation scripts and such.
 
 ## Copyright
 

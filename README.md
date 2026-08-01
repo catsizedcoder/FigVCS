@@ -5,6 +5,52 @@
 # What is FigVCS anyway?
 FigVCS is a (VCS) Version Control System built specifically for managing [FiguraMC](https://github.com/FiguraMC/Figura) avatars.
 
+## Installation
+You do **not** need to know how to code or install any developer tools. Pick your system below.
+
+### Windows (easiest)
+1. Press `Win + X` and choose **Terminal** (or **Windows PowerShell**).
+2. Paste this one line and press Enter:
+   ```powershell
+   irm https://raw.githubusercontent.com/catsizedcoder/FigVCS/main/install.ps1 | iex
+   ```
+3. Close the terminal and open a new one. Done! Try it: `fvcs --help`
+
+the script only downloads the FigVCS binary from this repository and adds it to your PATH.
+
+### Linux
+```sh
+curl -sSfL https://raw.githubusercontent.com/catsizedcoder/FigVCS/main/install.sh | sh
+```
+
+### Prefer clicking?
+Grab `fvcs-windows-x86_64.zip` (or the Linux tarball) from the [Releases page](https://github.com/catsizedcoder/FigVCS/releases), unzip it anywhere, and run `fvcs` from that folder.
+
+### Building from source (devs/contributors)
+Requires a [Rust toolchain](https://rustup.rs):
+```
+cargo build --release
+```
+The binary is built to `target/release/`.
+
+## Quick start
+```
+cd path/to/your/avatar     # the folder containing avatar.json
+fvcs init                  # create the repository (.fvcs/)
+fvcs add .                 # stage all files
+fvcs commit -m "initial"   # record the first version
+```
+Everyday commands:
+- `fvcs status` | staged / unstaged / untracked changes
+- `fvcs diff` | workdir vs staged; `fvcs diff --cached` | staged vs HEAD; `fvcs diff <a> <b>` | between commits/branches/tags
+- `fvcs log [--oneline]` | history
+- `fvcs branch`, `fvcs checkout <branch|commit>`, `fvcs tag <name>` | branches and tags
+- `fvcs restore <paths>` / `fvcs restore --staged <paths>` | discard workdir changes / unstage
+
+The storage is content-addressed and zlib-compressed (`.fvcs/objects/`), preventing the same file from being stored twice which means versioning an avatar costs a fraction of its size.
+
+Files listed in `.fvcsignore` (Formatted in the same way as git.) are excluded from tracking.
+
 ## Plans for this project
 - Establish a system that is low on storage usage but effective.
 - Establish an efficient system so that if a hub is created for avatars the local versioned repos can be uploaded with ease.

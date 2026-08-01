@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            artifact: fvcs-windows-x86_64.zip
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            artifact: fvcs-linux-x86_64.tar.gz
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - run: cargo build --release --target ${{ matrix.target }}
+      - name: Package (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force stage | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/fvcs.exe" stage/
+          Compress-Archive stage/* "${{ matrix.artifact }}"
+      - name: Package (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          mkdir stage
+          cp "target/${{ matrix.target }}/release/fvcs" stage/
+          tar -czf "${{ matrix.artifact }}" -C stage fvcs
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.artifact }}

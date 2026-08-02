@@ -174,3 +174,118 @@ fn fvcsignore_excludes_files() {
         .stdout(predicate::str::contains("notes.tmp").not())
         .stdout(predicate::str::contains("blob.bin").not());
 }
+
+fn write_file(dir: &Path, rel: &str, contents: &str) {
+    let path = dir.join(rel);
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(path, contents).unwrap();
+}
+
+#[test]
+fn clone_push_pull_roundtrip() {
+    let tmp = TempDir::new().unwrap();
+    let hub = tmp.path().join("hub");
+    let alice = tmp.path().join("alice");
+    let bob = tmp.path().join("bob");
+    fs::create_dir_all(&alice).unwrap();
+
+    init_avatar(&alice);
+    add_commit(&alice, "v1");
+    fvcs(&alice)
+        .args(["remote", "add", "origin", hub.to_str().unwrap()])
+        .assert()
+        .success();
+    fvcs(&alice).args(["push"]).assert().success();
+
+    fvcs(tmp.path())
+        .args(["clone", hub.to_str().unwrap(), bob.to_str().unwrap()])
+        .assert()
+        .success();
+    assert_eq!(
+        fs::read_to_string(bob.join("Init.lua")).unwrap(),
+        "local x = 1\n"
+    );
+
+    write_file(&bob, "Init.lua", "local x = 2\n");
+    add_commit(&bob, "v2 from bob");
+    fvcs(&bob).args(["push"]).assert().success();
+
+    fvcs(&alice).args(["pull"]).assert().success();
+    assert_eq!(
+        fs::read_to_string(alice.join("Init.lua")).unwrap(),
+        "local x = 2\n"
+    );
+
+    write_file(&alice, "Init.lua", "local x = 3\n");
+    add_commit(&alice, "v3 from alice");
+    fvcs(&alice).args(["push"]).assert().success();
+    write_file(&bob, "Init.lua", "local x = 4\n");
+    add_commit(&bob, "v4 from bob");
+    fvcs(&bob).args(["push"]).assert().failure();
+    fvcs(&bob).args(["pull"]).assert().failure();
+}
+
+#[test]
+fn lib_update_pulls_library_files() {
+    let tmp = TempDir::new().unwrap();
+    let libsrc = tmp.path().join("spring-lib");
+    let avatar = tmp.path().join("avatar");
+    fs::create_dir_all(&libsrc).unwrap();
+    fs::create_dir_all(&avatar).unwrap();
+
+    fvcs(&libsrc).arg("init").assert().success();
+    write_file(&libsrc, "spring.lua", "return { v = 1 }\n");
+    add_commit(&libsrc, "lib v1");
+
+    init_avatar(&avatar);
+    add_commit(&avatar, "avatar v1");
+    fvcs(&avatar)
+        .args(["lib", "add", "Spring", libsrc.to_str().unwrap()])
+        .assert()
+        .success();
+    fvcs(&avatar).args(["lib", "update"]).assert().success();
+    assert_eq!(
+        fs::read_to_string(avatar.join("Spring/spring.lua")).unwrap(),
+        "return { v = 1 }\n"
+    );
+
+    write_file(&libsrc, "spring.lua", "return { v = 2 }\n");
+    add_commit(&libsrc, "lib v2");
+    fvcs(&avatar).args(["pull"]).assert().success();
+    assert_eq!(
+        fs::read_to_string(avatar.join("Spring/spring.lua")).unwrap(),
+        "return { v = 2 }\n"
+    );
+}
+
+#[test]
+fn lib_add_with_subdir() {
+    let tmp = TempDir::new().unwrap();
+    let libsrc = tmp.path().join("big-repo");
+    let avatar = tmp.path().join("avatar2");
+    fs::create_dir_all(&libsrc).unwrap();
+    fs::create_dir_all(&avatar).unwrap();
+
+    fvcs(&libsrc).arg("init").assert().success();
+    write_file(&libsrc, "modules/foxpat.lua", "foxpat code\n");
+    write_file(&libsrc, "other/junk.lua", "junk\n");
+    add_commit(&libsrc, "lib");
+
+    init_avatar(&avatar);
+    add_commit(&avatar, "avatar v1");
+    fvcs(&avatar)
+        .args([
+            "lib",
+            "add",
+            "FOXAPI",
+            libsrc.to_str().unwrap(),
+            "--subdir",
+            "modules",
+        ])
+        .assert()
+        .success();
+    fvcs(&avatar).args(["lib", "update"]).assert().success();
+    assert!(avatar.join("FOXAPI/foxpat.lua").exists());
+    assert!(!avatar.join("FOXAPI/other/junk.lua").exists());
+    assert!(!avatar.join("FOXAPI/junk.lua").exists());
+}

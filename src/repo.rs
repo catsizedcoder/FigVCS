@@ -8,6 +8,7 @@ pub const DEFAULT_BRANCH: &str = "main";
 
 pub struct Repository {
     pub root: PathBuf,
+    objects_dir: Option<PathBuf>,
 }
 
 impl Repository {
@@ -15,7 +16,9 @@ impl Repository {
         self.root.join(DIR)
     }
     pub fn objects(&self) -> PathBuf {
-        self.fvcs().join("objects")
+        self.objects_dir
+            .clone()
+            .unwrap_or_else(|| self.fvcs().join("objects"))
     }
     pub fn commits(&self) -> PathBuf {
         self.fvcs().join("commits")
@@ -38,7 +41,10 @@ impl Repository {
         let root = path
             .canonicalize()
             .with_context(|| format!("canonicalizing {}", path.display()))?;
-        let repo = Repository { root };
+        let repo = Repository {
+            root,
+            objects_dir: None,
+        };
         if repo.fvcs().exists() {
             bail!("{} is already a FigVCS repository", repo.root.display());
         }
@@ -50,13 +56,32 @@ impl Repository {
         Ok(repo)
     }
 
+    pub fn with_shared_objects(root: PathBuf, objects_dir: PathBuf) -> Result<Self> {
+        let root = root.canonicalize().unwrap_or(root);
+        let repo = Repository {
+            root,
+            objects_dir: Some(objects_dir),
+        };
+        fs::create_dir_all(repo.objects())?;
+        fs::create_dir_all(repo.commits())?;
+        fs::create_dir_all(repo.heads())?;
+        fs::create_dir_all(repo.tags())?;
+        if !repo.head_file().exists() {
+            fs::write(repo.head_file(), format!("refs/heads/{DEFAULT_BRANCH}"))?;
+        }
+        Ok(repo)
+    }
+
     pub fn discover(start: &Path) -> Result<Self> {
         let mut cur = start
             .canonicalize()
             .with_context(|| format!("canonicalizing {}", start.display()))?;
         loop {
             if cur.join(DIR).is_dir() {
-                return Ok(Repository { root: cur });
+                return Ok(Repository {
+                    root: cur,
+                    objects_dir: None,
+                });
             }
             if !cur.pop() {
                 bail!("not a FigVCS repository (or any parent directory)");

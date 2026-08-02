@@ -16,6 +16,19 @@ pub fn hash_bytes(data: &[u8]) -> String {
         .collect()
 }
 
+pub fn compress(data: &[u8]) -> Result<Vec<u8>> {
+    let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+    encoder.write_all(data)?;
+    Ok(encoder.finish()?)
+}
+
+pub fn decompress(data: &[u8]) -> Result<Vec<u8>> {
+    let mut decoder = ZlibDecoder::new(data);
+    let mut out = Vec::new();
+    decoder.read_to_end(&mut out)?;
+    Ok(out)
+}
+
 fn object_path(repo: &Repository, hash: &str) -> std::path::PathBuf {
     repo.objects().join(&hash[..2]).join(&hash[2..])
 }
@@ -29,21 +42,37 @@ pub fn write(repo: &Repository, data: &[u8]) -> Result<String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
-    encoder.write_all(data)?;
-    let compressed = encoder.finish()?;
+    let compressed = compress(data)?;
     fs::write(&path, compressed).with_context(|| format!("writing object {hash}"))?;
     Ok(hash)
 }
 
 pub fn read(repo: &Repository, hash: &str) -> Result<Vec<u8>> {
-    let path = object_path(repo, hash);
-    let compressed =
-        fs::read(&path).with_context(|| format!("reading object {hash} (missing?)"))?;
+    let compressed = read_compressed(repo, hash)?;
     let mut decoder = ZlibDecoder::new(&compressed[..]);
     let mut data = Vec::new();
     decoder.read_to_end(&mut data)?;
     Ok(data)
+}
+
+pub fn read_compressed(repo: &Repository, hash: &str) -> Result<Vec<u8>> {
+    let path = object_path(repo, hash);
+    fs::read(&path).with_context(|| format!("reading object {hash} (missing?)"))
+}
+
+pub fn write_compressed(repo: &Repository, hash: &str, compressed: &[u8]) -> Result<()> {
+    let path = object_path(repo, hash);
+    if path.exists() {
+        return Ok(());
+    }
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(&path, compressed).with_context(|| format!("writing object {hash}"))
+}
+
+pub fn exists(repo: &Repository, hash: &str) -> bool {
+    object_path(repo, hash).exists()
 }
 
 #[cfg(test)]

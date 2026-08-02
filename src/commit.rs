@@ -33,13 +33,21 @@ impl Commit {
     }
 
     pub fn store(&self, repo: &Repository) -> Result<String> {
-        let json = serde_json::to_vec_pretty(self)?;
+        let json = self.to_json()?;
         let hash = object::hash_bytes(&json);
         let path = repo.commits().join(format!("{hash}.json"));
         if !path.exists() {
             fs::write(&path, &json).with_context(|| format!("writing commit {hash}"))?;
         }
         Ok(hash)
+    }
+
+    pub fn to_json(&self) -> Result<Vec<u8>> {
+        Ok(serde_json::to_vec_pretty(self)?)
+    }
+
+    pub fn from_json(data: &[u8]) -> Result<Self> {
+        serde_json::from_slice(data).context("parsing commit")
     }
 
     pub fn load(repo: &Repository, hash: &str) -> Result<Self> {

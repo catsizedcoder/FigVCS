@@ -1,0 +1,16 @@
+pub mod cli;
+pub mod commit;
+pub mod config;
+pub mod diff;
+pub mod gc;
+pub mod global_config;
+pub mod http_store;
+pub mod ignore;
+pub mod index;
+pub mod object;
+pub mod pol;
+pub mod refs;
+pub mod registry;
+pub mod remote;
+pub mod repo;
+pub mod status;

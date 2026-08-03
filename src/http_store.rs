@@ -15,9 +15,18 @@ pub struct HttpStore {
 impl HttpStore {
     pub fn new(url: &str, token: Option<&str>) -> Result<Self> {
         let trimmed = url.trim_end_matches('/');
+        let after_scheme = trimmed
+            .strip_prefix("http://")
+            .or_else(|| trimmed.strip_prefix("https://"))
+            .context("server URLs look like http://host/repo-name")?;
+        if !after_scheme.contains('/') {
+            bail!(
+                "'{trimmed}' is missing the repo name | server URLs look like http://host/repo-name"
+            );
+        }
         let split = trimmed
             .rfind('/')
-            .context("server URLs look like https://host/repo-name")?;
+            .context("server URLs look like http://host/repo-name")?;
         let (server, repo) = trimmed.split_at(split);
         let client = Client::builder()
             .user_agent(concat!("fvcs/", env!("CARGO_PKG_VERSION")))
@@ -95,6 +104,17 @@ impl HttpStore {
         }
     }
 
+    fn auth_hint(&self) -> String {
+        let server = self.base.split("/v1/").next().unwrap_or(&self.base);
+        match &self.token {
+            Some(_) => "the server rejected your token | log in again with `fvcs login`"
+                .to_string(),
+            None => format!(
+                "the server requires a login | run `fvcs login {server}` (or `fvcs remote add --token`)"
+            ),
+        }
+    }
+
     fn request(&self, method: reqwest::Method, path: &str) -> reqwest::blocking::RequestBuilder {
         let builder = self.client.request(method, format!("{}{path}", self.base));
         match &self.token {
@@ -111,9 +131,7 @@ impl HttpStore {
         match response.status() {
             StatusCode::OK => Ok(Some(response.bytes()?.to_vec())),
             StatusCode::NOT_FOUND => Ok(None),
-            StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => {
-                bail!("the server rejected your token | check `fvcs remote add`")
-            }
+            StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => bail!("{}", self.auth_hint()),
             status => bail!("server error: {status}"),
         }
     }
@@ -126,9 +144,7 @@ impl HttpStore {
             .with_context(|| format!("connecting to {}", self.base))?;
         match response.status() {
             StatusCode::OK | StatusCode::CREATED | StatusCode::NO_CONTENT => Ok(()),
-            StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => {
-                bail!("the server rejected your token | check `fvcs remote add`")
-            }
+            StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => bail!("{}", self.auth_hint()),
             StatusCode::CONFLICT => {
                 bail!("the server refused the push | someone else pushed first, run `fvcs pull`")
             }

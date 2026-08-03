@@ -771,6 +771,19 @@ fn cmd_remote(action: Option<RemoteAction>) -> Result<()> {
             }
         }
         Some(RemoteAction::Add { name, path, token }) => {
+            if name.contains("://") {
+                bail!("that looks like a URL | usage is `fvcs remote add <name> <url>`, e.g. `fvcs remote add origin {name}`");
+            }
+            if name.contains('/') || name.contains('\\') || name.contains(':') {
+                bail!("remote names can't contain '/', '\\' or ':' | usage is `fvcs remote add <name> <url>`");
+            }
+            let looks_like_host_port = !path.contains("://")
+                && path
+                    .split_once(':')
+                    .is_some_and(|(_, rest)| rest.chars().next().is_some_and(|c| c.is_ascii_digit()));
+            if looks_like_host_port {
+                bail!("'{path}' is missing a URL scheme | did you mean http://{path}?");
+            }
             let entry = match token {
                 Some(token) => crate::config::Remote::Full {
                     url: path.clone(),

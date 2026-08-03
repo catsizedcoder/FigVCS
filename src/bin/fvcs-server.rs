@@ -722,8 +722,11 @@ async fn post_commit(
     headers: HeaderMap,
     body: Bytes,
 ) -> impl IntoResponse {
+    let r = match guard_write(&state, &headers, &repo) {
+        Ok(r) => r,
+        Err(status) => return status.into_response(),
+    };
     let result = (|| -> Result<()> {
-        let r = guard_write(&state, &headers, &repo).map_err(|e| anyhow::anyhow!("{e}"))?;
         let commit = Commit::from_json(&body)?;
         anyhow::ensure!(
             object::hash_bytes(&commit.to_json()?) == hash,
@@ -758,8 +761,11 @@ async fn post_object(
     headers: HeaderMap,
     body: Bytes,
 ) -> impl IntoResponse {
+    let r = match guard_write(&state, &headers, &repo) {
+        Ok(r) => r,
+        Err(status) => return status.into_response(),
+    };
     let result = (|| -> Result<()> {
-        let r = guard_write(&state, &headers, &repo).map_err(|e| anyhow::anyhow!("{e}"))?;
         let raw = object::decompress(&body)?;
         anyhow::ensure!(object::hash_bytes(&raw) == hash, "hash mismatch");
         object::write_compressed(&r, &hash, &body)?;
